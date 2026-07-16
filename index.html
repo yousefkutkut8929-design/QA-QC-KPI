@@ -773,6 +773,22 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
 #pk-root .btn.danger{background:#fff;color:var(--warn);border:1.5px solid #E8C6BC;}
 
+#pk-root .btn.ok{background:var(--ok);color:#fff;}
+
+#pk-root .btn.ok:hover{background:#3f6549;}
+
+#pk-root .audit-item{border:1.5px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;background:#FCFCFA;}
+
+#pk-root .audit-item.answered{border-color:var(--ok);background:#F3F8F4;}
+
+#pk-root .audit-item .ai-head{display:flex;gap:12px;align-items:flex-start;}
+
+#pk-root .audit-item .ai-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer;flex-shrink:0;}
+
+#pk-root .audit-item .ai-text{flex:1;white-space:pre-wrap;font-size:13px;line-height:1.55;}
+
+#pk-root .audit-item .ai-meta{font-size:11.5px;color:var(--navy-700);margin-top:4px;}
+
 #pk-root .btn:disabled{opacity:.5;cursor:not-allowed;}
 
 #pk-root .row-inline{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
@@ -2276,7 +2292,7 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Week</th><th>Plant</th><th>Project</th><th>Item</th><th>Model</th><th>QTY</th><th>Date</th>
-            <th>Notes</th><th>NCR</th><th>ASF</th><th>Near Miss</th><th></th></tr></thead>
+            <th>Notes</th><th>NCR</th><th>ASF</th><th>Near Miss</th><th>Audit</th><th></th></tr></thead>
           <tbody id="entriesBody"></tbody>
         </table>
       </div>
@@ -2477,6 +2493,55 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
           <button type="button" class="btn ghost" onclick="ChecklistMgmt.closeForm()">إلغاء</button>
         </div>
       </form>
+    </div>
+  </section>
+
+  <!-- DO AUDIT — checklist execution page opened from a Near Miss row -->
+  <section class="view" id="view-doaudit">
+    <div class="card">
+      <div class="flex-between">
+        <h2><span class="num">17</span> تدقيق Near Miss — تعبئة التشيك ليست</h2>
+        <button class="btn ghost btn-sm" onclick="DoAudit.close()">⟵ رجوع للسجلات</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Week</th><th>Plant</th><th>Project</th><th>Item</th><th>Model</th><th>QTY</th><th>Date</th><th>المهندس</th></tr></thead>
+          <tbody id="daEntryInfo"></tbody>
+        </table>
+      </div>
+      <div class="grid cols-3" style="margin-top:14px;">
+        <div class="field">
+          <label>نوع التدقيق</label>
+          <select id="da_auditType" onchange="DoAudit.onTypeChange()">
+            <option value="ASF">ASF</option>
+            <option value="NCR">NCR</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>القسم (Department)</label>
+          <select id="da_department" onchange="DoAudit.onDepartmentChange()">
+            <option value="">اختر القسم...</option>
+          </select>
+        </div>
+        <div class="field">
+          <label style="visibility:hidden;">.</label>
+          <p class="small" id="daSavedStatus">لسا ما تحفظ تدقيق لهاد السجل.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="daItemsCard" style="display:none;">
+      <div class="flex-between">
+        <h2><span class="num">18</span> بنود التشيك ليست<span class="badge" id="daItemsCount" style="margin-inline-start:8px;"></span></h2>
+        <button class="btn amber" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
+      </div>
+      <p class="hint">اختر حالة كل بند (Applied/Applicable إلخ)، وأضف ملاحظة إذا لزم. البنود غير المطبَّقة أو غير القابلة للتطبيق ممكن تُترك بدون تعليق.</p>
+      <div id="daItemsList" style="margin-top:12px;"></div>
+      <button class="btn amber" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
+    </div>
+
+    <div class="card" id="daEmptyState">
+      <p class="hint">اختاري نوع التدقيق والقسم فوق لعرض بنود التشيك ليست الخاصة فيهم.</p>
     </div>
   </section>
 
@@ -2728,7 +2793,7 @@ const App = {
       .filter(([k,v]) => filter==='all' || v.week == filter)
       .sort((a,b)=> (b[1].ts||0)-(a[1].ts||0));
     if(rows.length===0){
-      body.innerHTML = `<tr><td colspan="12" class="empty">ولا سجل لهسا لهاد المهندس</td></tr>`;
+      body.innerHTML = `<tr><td colspan="13" class="empty">ولا سجل لهسا لهاد المهندس</td></tr>`;
       return;
     }
     body.innerHTML = rows.map(([k,v])=>{
@@ -2745,6 +2810,7 @@ const App = {
         <td>${sel('ncr', v.ncr)}</td>
         <td>${sel('asf', v.asf)}</td>
         <td><span class="badge ${nm==='Yes'?'warn':''}">${nm}</span></td>
+        <td>${nm==='Yes' ? DoAudit.buttonHtml(activeEngineerId, k) : '<span class="hint">—</span>'}</td>
         <td><button class="btn ghost" style="padding:4px 10px;font-size:11px;" onclick="App.deleteEntry('${activeEngineerId}','${k}')">حذف</button></td>
       </tr>`;
     }).join('');
@@ -3480,16 +3546,227 @@ const ChecklistMgmt = {
   }
 };
 
+/* ============================================================
+   AUDIT RECORDS — one checklist execution per Near Miss entry
+   Collection: auditRecords, doc id === kpiEntries doc id (1:1 with
+   the Near Miss row it was opened from), so a button can just check
+   auditRecords[entryId] to know whether an audit already exists.
+   ============================================================ */
+const auditRecordsCol = db.collection('auditRecords');
+let auditRecords = {}; // { [entryId]: {...record} }
+
+function startAuditRecordsRealtime(){
+  auditRecordsCol.onSnapshot(snap=>{
+    const rows = {};
+    snap.forEach(doc=> rows[doc.id] = { id: doc.id, ...doc.data() });
+    auditRecords = rows;
+    if(document.getElementById('entriesBody')) App.renderEntries();
+  }, err=>{
+    console.error('auditRecords onSnapshot failed:', err);
+    toast('تعذّر تحميل سجلات التدقيق: ' + err.message, true);
+  });
+}
+
+const STATUS_OPTIONS = {
+  ASF: ['Applied / مُطبَّق','Not Applied / غير مُطبَّق','In Progress / قيد التنفيذ','N/A / لا ينطبق'],
+  NCR: ['Applicable / قابل للتطبيق','Not Applicable / غير قابل للتطبيق','N/A / لا ينطبق']
+};
+
+function departmentsForAuditType(type){
+  const set = new Set(checklistTemplates.filter(t=>t.auditType===type).map(t=>t.department));
+  if(!set.size && window.CHECKLIST_TEMPLATES_SEED){
+    CHECKLIST_TEMPLATES_SEED.filter(t=>t.auditType===type).forEach(t=> set.add(t.department));
+  }
+  return [...set];
+}
+
+function templatesForAudit(type, department){
+  let rows = checklistTemplates.filter(t=> t.auditType===type && t.department===department && t.active!==false);
+  if(!rows.length && window.CHECKLIST_TEMPLATES_SEED){
+    rows = CHECKLIST_TEMPLATES_SEED.filter(t=> t.auditType===type && t.department===department);
+  }
+  return rows.sort((a,b)=> (a.sortOrder||0) - (b.sortOrder||0));
+}
+
+const DoAudit = {
+  engId: null,
+  entryKey: null,
+  entry: null,
+
+  // Rendered inside App.renderEntries() for every Near Miss = Yes row.
+  buttonHtml(engId, entryKey){
+    const rec = auditRecords[entryKey];
+    return rec
+      ? `<button class="btn ok" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">✓ تدقيق مكتمل</button>`
+      : `<button class="btn amber" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">🔍 بدء تدقيق</button>`;
+  },
+
+  open(engId, entryKey){
+    const entry = (liveData.entries[engId] || {})[entryKey];
+    if(!entry){ toast('تعذّر إيجاد هالسجل', true); return; }
+    this.engId = engId;
+    this.entryKey = entryKey;
+    this.entry = entry;
+
+    // switch view (same mechanism as nav.tabs, done manually since this page has no tab button)
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('#pk-root .view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-doaudit').classList.add('active');
+
+    const engName = ENGINEERS.find(e=>e.id===engId)?.name || engId;
+    document.getElementById('daEntryInfo').innerHTML = `<tr>
+      <td>${entry.week}</td><td>${entry.plant||'-'}</td><td>${entry.project||'-'}</td>
+      <td>${entry.item||'-'}</td><td>${entry.model||'-'}</td><td>${entry.qty}</td>
+      <td>${entry.date||'-'}</td><td>${engName}</td>
+    </tr>`;
+
+    const existing = auditRecords[entryKey];
+    const defaultType = existing?.auditType || (entry.asf===1 ? 'ASF' : (entry.ncr===1 ? 'NCR' : 'ASF'));
+    document.getElementById('da_auditType').value = defaultType;
+    this.refreshDepartments(existing?.department || '');
+    document.getElementById('daSavedStatus').textContent = existing
+      ? `آخر تحديث: ${new Date(existing.updatedAt).toLocaleString('ar-JO')} — بواسطة ${existing.completedBy||''}`
+      : 'لسا ما تحفظ تدقيق لهاد السجل.';
+
+    if(existing?.department){
+      this.renderItems(existing.items || []);
+    } else {
+      document.getElementById('daItemsCard').style.display = 'none';
+      document.getElementById('daEmptyState').style.display = 'block';
+    }
+  },
+
+  close(){
+    document.getElementById('view-doaudit').classList.remove('active');
+    document.getElementById('view-entry').classList.add('active');
+    document.querySelector('nav.tabs button[data-view="entry"]').classList.add('active');
+  },
+
+  refreshDepartments(selected){
+    const type = document.getElementById('da_auditType').value;
+    const depts = departmentsForAuditType(type);
+    const sel = document.getElementById('da_department');
+    sel.innerHTML = '<option value="">اختر القسم...</option>' + depts.map(d=>`<option value="${d}">${d}</option>`).join('');
+    sel.value = selected || '';
+  },
+
+  onTypeChange(){
+    this.refreshDepartments('');
+    document.getElementById('daItemsCard').style.display = 'none';
+    document.getElementById('daEmptyState').style.display = 'block';
+  },
+
+  onDepartmentChange(){
+    const dept = document.getElementById('da_department').value;
+    if(!dept){
+      document.getElementById('daItemsCard').style.display = 'none';
+      document.getElementById('daEmptyState').style.display = 'block';
+      return;
+    }
+    const existing = auditRecords[this.entryKey];
+    const prevAnswers = (existing && existing.department === dept) ? (existing.items || []) : [];
+    this.renderItems(prevAnswers);
+  },
+
+  renderItems(prevAnswers){
+    const type = document.getElementById('da_auditType').value;
+    const dept = document.getElementById('da_department').value;
+    const rows = templatesForAudit(type, dept);
+    const answerMap = {};
+    prevAnswers.forEach(a=> answerMap[a.templateId] = a);
+
+    document.getElementById('daEmptyState').style.display = 'none';
+    document.getElementById('daItemsCard').style.display = 'block';
+    document.getElementById('daItemsCount').textContent = rows.length + ' بند';
+
+    if(!rows.length){
+      document.getElementById('daItemsList').innerHTML = '<p class="hint">لا توجد بنود تشيك ليست لهاد القسم بعد. تأكدي من استيراد بنك التشيك ليست من تبويب "إدارة بنك التدقيق".</p>';
+      return;
+    }
+
+    document.getElementById('daItemsList').innerHTML = rows.map(t=>{
+      const prev = answerMap[t.id] || {};
+      const img = t.imagePath ? `<img class="ai-thumb" src="images/checklists/${t.imagePath}" loading="lazy" onclick="ChecklistMgmt.previewImage('${t.imagePath}')">` : '';
+      const text = t.correctiveAction || t.complaintSummary || '';
+      const meta = type === 'ASF'
+        ? (t.model ? `Model: ${t.model}` : '')
+        : [t.responsibility ? `Responsibility: ${t.responsibility}` : '', t.auditPlace ? `Audit place: ${t.auditPlace}` : ''].filter(Boolean).join(' — ');
+      const options = STATUS_OPTIONS[type] || [];
+      return `<div class="audit-item ${prev.status ? 'answered':''}" id="daItem_${t.id}">
+        <div class="ai-head">
+          ${img}
+          <div style="flex:1;">
+            <div class="ai-text"><b>#${t.itemNo}</b> — ${text}</div>
+            ${meta ? `<div class="ai-meta">${meta}</div>` : ''}
+          </div>
+        </div>
+        <div class="grid cols-2" style="margin-top:10px;">
+          <div class="field">
+            <label>الحالة</label>
+            <select id="da_status_${t.id}" onchange="DoAudit.markAnswered('${t.id}')">
+              <option value="">-- اختر --</option>
+              ${options.map(o=>`<option value="${o}" ${prev.status===o?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>ملاحظات</label>
+            <input type="text" id="da_comment_${t.id}" value="${(prev.comment||'').replace(/"/g,'&quot;')}" placeholder="اختياري">
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  markAnswered(templateId){
+    const el = document.getElementById('daItem_'+templateId);
+    const val = document.getElementById('da_status_'+templateId).value;
+    if(el) el.classList.toggle('answered', !!val);
+  },
+
+  async save(){
+    const type = document.getElementById('da_auditType').value;
+    const dept = document.getElementById('da_department').value;
+    if(!dept){ toast('الرجاء اختيار القسم قبل الحفظ', true); return; }
+    const rows = templatesForAudit(type, dept);
+    const items = rows.map(t=>({
+      templateId: t.id,
+      itemNo: t.itemNo,
+      status: document.getElementById('da_status_'+t.id).value,
+      comment: document.getElementById('da_comment_'+t.id).value.trim()
+    }));
+    const engName = ENGINEERS.find(e=>e.id===this.engId)?.name || this.engId;
+    const data = {
+      entryId: this.entryKey,
+      engineerId: this.engId,
+      entrySnapshot: {
+        week: this.entry.week, plant: this.entry.plant||'', project: this.entry.project||'',
+        item: this.entry.item||'', model: this.entry.model||'', qty: this.entry.qty, date: this.entry.date||''
+      },
+      auditType: type,
+      department: dept,
+      items,
+      completedBy: engName,
+      updatedAt: Date.now()
+    };
+    try{
+      await auditRecordsCol.doc(this.entryKey).set(data, {merge:true});
+      toast('تم حفظ نتيجة التدقيق ✓');
+      document.getElementById('daSavedStatus').textContent = `آخر تحديث: ${new Date(data.updatedAt).toLocaleString('ar-JO')} — بواسطة ${engName}`;
+    }catch(e){ toast('خطأ بالحفظ: '+e.message, true); }
+  }
+};
+
 /* ============================================================ */
 App.init();
 ChecklistMgmt.init();
+startAuditRecordsRealtime();
 </script>
 </div>
 
 <script>
 (function(){
   var buttons = document.querySelectorAll('.outer-tabs button[data-section]');
-  var sections = { nm: document.getElementById('nm-root'), pk: document.getElementById('pk-section') };
+  var sections = { nm: document.getElementById('nm-root'), pk: document.getElementById('pk-root') };
   buttons.forEach(function(btn){
     btn.addEventListener('click', function(){
       buttons.forEach(function(b){ b.classList.toggle('active', b === btn); });
