@@ -20,6 +20,9 @@
      ============================================================ -->
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<!-- Checklist Templates seed data — extracted from ASF Audits.xlsx / NCR Audits.xlsx.
+     Used only by the one-time "استيراد البيانات الأولية" button in Checklist Management. -->
+<script src="checklist_templates_seed.js"></script>
 <script>
   // ⚠️ TODO: استبدل القيم هون بقيم مشروعك الفعلي من Firebase Console
 const firebaseConfig = {
@@ -2102,6 +2105,7 @@ P2-H3&#9;261758&#9;3&#9;PPH4 - 300&#9;3&#9;6/24/2026"></textarea>
     <button data-view="entry">إدخال البيانات اليومي</button>
     <button data-view="weekly">الأرقام الأسبوعية</button>
     <button data-view="kpiweekly">KPI Weekly</button>
+    <button data-view="checklistmgmt">إدارة بنك التدقيق</button>
     <button data-view="pkio">استيراد / تصدير Excel</button>
     <button data-view="settings">الإعدادات</button>
   </nav>
@@ -2365,6 +2369,114 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
         </table>
       </div>
       <p class="small" style="margin-top:10px;">القائمة مطابقة لتبويبات الملف الأصلي. لإضافة/تعديل مهندس، تواصل مع من طوّر الأداة (تعديل بسيط بالكود).</p>
+    </div>
+  </section>
+
+  <!-- CHECKLIST MANAGEMENT (Quality Manager) — CRUD for checklistTemplates -->
+  <section class="view" id="view-checklistmgmt">
+    <div class="card">
+      <h2><span class="num">16</span> إدارة بنك تشيك ليست التدقيق (ASF / NCR)</h2>
+      <p class="hint">هاد التبويب مخصص لمسؤول الجودة (Quality Manager) لإضافة/تعديل/حذف/إعادة ترتيب بنود التشيك ليست بدون التعامل مع الكود مباشرة. البنود المخزّنة هون هي نفسها اللي بتظهر لكل المهندسين عند عمل تدقيق (Do Audit) على أي وحدة إنتاج.</p>
+      <p class="small" id="cmImportStatus" style="margin-top:6px;"></p>
+      <button class="btn amber" onclick="ChecklistMgmt.importSeed()">⬇ استيراد البيانات الأولية من ملفي Excel (مرة واحدة، آمن التكرار)</button>
+    </div>
+
+    <div class="card">
+      <div class="row-inline" style="align-items:flex-end;flex-wrap:wrap;gap:10px;">
+        <div class="field" style="max-width:140px;">
+          <label>نوع التدقيق</label>
+          <select id="cmAuditType"><option value="ASF">ASF</option><option value="NCR">NCR</option></select>
+        </div>
+        <div class="field" style="max-width:220px;">
+          <label>القسم</label>
+          <select id="cmDepartment"><option value="">كل الأقسام</option></select>
+        </div>
+        <div class="field" style="flex:1;min-width:180px;">
+          <label>بحث (رقم الشكوى / النص / الموديل)</label>
+          <input type="text" id="cmSearch" placeholder="اكتب للبحث...">
+        </div>
+        <div class="field" style="max-width:160px;">
+          <label style="visibility:hidden;">.</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:600;"><input type="checkbox" id="cmShowInactive"> إظهار المعطّل</label>
+        </div>
+        <div class="field" style="max-width:170px;">
+          <label style="visibility:hidden;">.</label>
+          <button class="btn" onclick="ChecklistMgmt.openAddForm()">+ إضافة بند جديد</button>
+        </div>
+      </div>
+      <p class="small" id="cmCount" style="margin-top:8px;"></p>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr>
+            <th>#</th><th>صورة</th><th>الوصف / الإجراء التصحيحي</th><th>الموديل / المسؤولية</th><th>رقم الشكوى</th><th>ترتيب</th><th>إجراءات</th>
+          </tr></thead>
+          <tbody id="cmTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="cmFormWrap" style="display:none;">
+      <div class="flex-between">
+        <h2 id="cmFormTitle">إضافة بند جديد</h2>
+        <button class="btn ghost btn-sm" onclick="ChecklistMgmt.closeForm()">إغلاق ✕</button>
+      </div>
+      <form id="cmForm">
+        <div class="grid cols-3">
+          <div class="field">
+            <label>نوع التدقيق</label>
+            <select id="cmf_auditType" onchange="ChecklistMgmt.toggleNcrFields()"><option value="ASF">ASF</option><option value="NCR">NCR</option></select>
+          </div>
+          <div class="field">
+            <label>القسم (Department)</label>
+            <input type="text" id="cmf_department" placeholder="مثال: Testing" required>
+          </div>
+          <div class="field">
+            <label>رقم البند (Item No)</label>
+            <input type="number" id="cmf_itemNo" min="1" required>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>رقم الشكوى / NCR # (اختياري)</label>
+          <input type="text" id="cmf_complaintNo">
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>Complaint Summary — ملخص الملاحظة (نص مدمج EN + AR بنفس الحقل)</label>
+          <textarea id="cmf_complaintSummary" style="height:70px;" placeholder="English text...\n\nنص عربي..."></textarea>
+        </div>
+        <div id="cmAsfOnlyFields">
+          <div class="field" style="margin-top:12px;">
+            <label>Model — الموديل (خاص بـ ASF)</label>
+            <input type="text" id="cmf_model">
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>Corrective Action / Issue — الإجراء التصحيحي (نص مدمج EN + AR بنفس الحقل)</label>
+          <textarea id="cmf_correctiveAction" style="height:110px;" placeholder="English text...\n\nنص عربي..."></textarea>
+        </div>
+        <div id="cmNcrOnlyFields" class="grid cols-2" style="margin-top:12px;">
+          <div class="field">
+            <label>Responsibility — الجهة المسؤولة (خاص بـ NCR)</label>
+            <input type="text" id="cmf_responsibility">
+          </div>
+          <div class="field">
+            <label>Audit place — موقع التدقيق (خاص بـ NCR)</label>
+            <input type="text" id="cmf_auditPlace">
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>Applicability — قابلية التطبيق (خاص بـ NCR، اختياري)</label>
+          <input type="text" id="cmf_applicability">
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>مسار صورة مرجعية (Image Path) — نسبي داخل مجلد images/checklists/، اختياري</label>
+          <input type="text" id="cmf_imagePath" placeholder="ASF/testing/014.webp" style="direction:ltr;text-align:left;font-family:var(--font-mono);">
+          <span class="hint">الصور ملفات ثابتة بالمشروع نفسه (مش Firebase) — لازم ترفعي ملف الصورة يدوياً لمجلد images/checklists/ بنفس المسار المكتوب هون قبل الحفظ. اتركي الحقل فاضي إذا ما في صورة.</span>
+        </div>
+        <div class="row-inline" style="margin-top:16px;">
+          <button type="submit" class="btn amber">💾 حفظ البند</button>
+          <button type="button" class="btn ghost" onclick="ChecklistMgmt.closeForm()">إلغاء</button>
+        </div>
+      </form>
     </div>
   </section>
 
@@ -3113,8 +3225,264 @@ const IO = {
 };
 function round1(v){ return Math.round(v*10)/10; }
 
+/* ============================================================
+   CHECKLIST TEMPLATES — Petra QC Audit Checklist System (ASF / NCR)
+   Collection: checklistTemplates
+   Doc ID convention: {auditType}_{departmentSlug}_{itemNo}  (deterministic,
+   so importing the same seed data twice never creates duplicates)
+   Images are NEVER stored in Firestore — imagePath only points to a static
+   file under /images/checklists/{ASF|NCR}/{departmentSlug}/{itemNo}.webp
+   which lives in the project itself (GitHub Pages), not Firebase.
+   ============================================================ */
+const checklistTemplatesCol = db.collection('checklistTemplates');
+
+// Cached locally, refreshed only via onSnapshot (loaded once per session,
+// per the performance requirements — no repeated .get() calls anywhere).
+let checklistTemplates = []; // flat array of template docs, kept in sync live
+
+function startChecklistTemplatesRealtime(){
+  checklistTemplatesCol.onSnapshot(snap=>{
+    const rows = [];
+    snap.forEach(doc=> rows.push({ id: doc.id, ...doc.data() }));
+    checklistTemplates = rows;
+    if(window.ChecklistMgmt) ChecklistMgmt.onData();
+  }, err=>{
+    console.error('checklistTemplates onSnapshot failed:', err);
+    toast('تعذّر تحميل بنك تشيك ليست التدقيق: ' + err.message, true);
+  });
+}
+
+const ChecklistMgmt = {
+  filters: { auditType: 'ASF', department: '', search: '' },
+  editingId: null, // null = add mode, otherwise editing this template id
+
+  init(){
+    startChecklistTemplatesRealtime();
+    document.getElementById('cmAuditType').addEventListener('change', e=>{
+      this.filters.auditType = e.target.value;
+      this.filters.department = '';
+      this.refreshDepartmentOptions();
+      this.render();
+    });
+    document.getElementById('cmDepartment').addEventListener('change', e=>{
+      this.filters.department = e.target.value;
+      this.render();
+    });
+    document.getElementById('cmSearch').addEventListener('input', e=>{
+      this.filters.search = e.target.value.trim().toLowerCase();
+      this.render();
+    });
+    document.getElementById('cmShowInactive').addEventListener('change', ()=> this.render());
+    document.getElementById('cmForm').addEventListener('submit', e=>{ e.preventDefault(); this.save(); });
+    this.refreshDepartmentOptions();
+  },
+
+  onData(){
+    this.refreshDepartmentOptions();
+    this.render();
+    this.updateImportStatus();
+  },
+
+  departmentsFor(auditType){
+    const set = new Set(checklistTemplates.filter(t=>t.auditType===auditType).map(t=>t.department));
+    // fall back to the seed list before the first import happens, so the filter isn't empty
+    if(!set.size && window.CHECKLIST_TEMPLATES_SEED){
+      CHECKLIST_TEMPLATES_SEED.filter(t=>t.auditType===auditType).forEach(t=> set.add(t.department));
+    }
+    return [...set];
+  },
+
+  refreshDepartmentOptions(){
+    const sel = document.getElementById('cmDepartment');
+    const depts = this.departmentsFor(this.filters.auditType);
+    sel.innerHTML = '<option value="">كل الأقسام</option>' + depts.map(d=>`<option value="${d}">${d}</option>`).join('');
+    sel.value = this.filters.department;
+  },
+
+  rows(){
+    return checklistTemplates
+      .filter(t=> t.auditType === this.filters.auditType)
+      .filter(t=> !this.filters.department || t.department === this.filters.department)
+      .filter(t=> document.getElementById('cmShowInactive').checked ? true : t.active !== false)
+      .filter(t=>{
+        if(!this.filters.search) return true;
+        const s = this.filters.search;
+        return (t.complaintNo||'').toLowerCase().includes(s) ||
+               (t.complaintSummary||'').toLowerCase().includes(s) ||
+               (t.correctiveAction||'').toLowerCase().includes(s) ||
+               (t.model||'').toLowerCase().includes(s);
+      })
+      .sort((a,b)=> (a.sortOrder||0) - (b.sortOrder||0));
+  },
+
+  render(){
+    const rows = this.rows();
+    document.getElementById('cmCount').textContent = rows.length + ' بند';
+    const tbody = document.getElementById('cmTableBody');
+    if(!rows.length){
+      tbody.innerHTML = '<tr><td colspan="7" class="hint" style="text-align:center;padding:20px;">لا توجد بنود مطابقة — جرّب استيراد بيانات البداية من زر "استيراد من Excel" بالأسفل.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map((t,i)=>{
+      const img = t.imagePath ? `<img src="images/checklists/${t.imagePath}" loading="lazy" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:pointer;" onclick="ChecklistMgmt.previewImage('${t.imagePath}')">` : '<span class="hint">—</span>';
+      const inactive = t.active === false;
+      return `<tr style="${inactive?'opacity:.5;':''}">
+        <td>${t.itemNo}</td>
+        <td>${img}</td>
+        <td style="max-width:260px;white-space:pre-wrap;">${(t.correctiveAction||t.complaintSummary||'').slice(0,140)}</td>
+        <td>${t.model || t.responsibility || '-'}</td>
+        <td>${t.complaintNo || '-'}</td>
+        <td>
+          <button class="btn ghost btn-sm" title="أعلى" onclick="ChecklistMgmt.move('${t.id}',-1)" ${i===0?'disabled':''}>↑</button>
+          <button class="btn ghost btn-sm" title="أسفل" onclick="ChecklistMgmt.move('${t.id}',1)" ${i===rows.length-1?'disabled':''}>↓</button>
+        </td>
+        <td>
+          <button class="btn ghost btn-sm" onclick="ChecklistMgmt.edit('${t.id}')">تعديل</button>
+          <button class="btn ghost btn-sm" onclick="ChecklistMgmt.toggleActive('${t.id}', ${inactive})">${inactive?'إعادة تفعيل':'تعطيل'}</button>
+          <button class="btn danger btn-sm" onclick="ChecklistMgmt.remove('${t.id}')">حذف نهائي</button>
+        </td>
+      </tr>`;
+    }).join('');
+  },
+
+  previewImage(path){
+    window.open('images/checklists/' + path, '_blank');
+  },
+
+  openAddForm(){
+    this.editingId = null;
+    document.getElementById('cmFormTitle').textContent = 'إضافة بند جديد';
+    document.getElementById('cmForm').reset();
+    document.getElementById('cmf_auditType').value = this.filters.auditType;
+    document.getElementById('cmf_department').value = this.filters.department || '';
+    this.toggleNcrFields();
+    document.getElementById('cmFormWrap').style.display = 'block';
+    document.getElementById('cmFormWrap').scrollIntoView({behavior:'smooth', block:'start'});
+  },
+
+  edit(id){
+    const t = checklistTemplates.find(x=>x.id===id);
+    if(!t) return;
+    this.editingId = id;
+    document.getElementById('cmFormTitle').textContent = 'تعديل البند #' + t.itemNo;
+    document.getElementById('cmf_auditType').value = t.auditType;
+    document.getElementById('cmf_department').value = t.department;
+    document.getElementById('cmf_itemNo').value = t.itemNo;
+    document.getElementById('cmf_complaintNo').value = t.complaintNo || '';
+    document.getElementById('cmf_complaintSummary').value = t.complaintSummary || '';
+    document.getElementById('cmf_model').value = t.model || '';
+    document.getElementById('cmf_correctiveAction').value = t.correctiveAction || '';
+    document.getElementById('cmf_responsibility').value = t.responsibility || '';
+    document.getElementById('cmf_auditPlace').value = t.auditPlace || '';
+    document.getElementById('cmf_applicability').value = t.applicability || '';
+    document.getElementById('cmf_imagePath').value = t.imagePath || '';
+    this.toggleNcrFields();
+    document.getElementById('cmFormWrap').style.display = 'block';
+    document.getElementById('cmFormWrap').scrollIntoView({behavior:'smooth', block:'start'});
+  },
+
+  toggleNcrFields(){
+    const isNcr = document.getElementById('cmf_auditType').value === 'NCR';
+    document.getElementById('cmNcrOnlyFields').style.display = isNcr ? '' : 'none';
+    document.getElementById('cmAsfOnlyFields').style.display = isNcr ? 'none' : '';
+  },
+
+  closeForm(){
+    document.getElementById('cmFormWrap').style.display = 'none';
+    this.editingId = null;
+  },
+
+  async save(){
+    const auditType = document.getElementById('cmf_auditType').value;
+    const department = document.getElementById('cmf_department').value.trim();
+    const itemNo = Number(document.getElementById('cmf_itemNo').value);
+    if(!department || !itemNo){ toast('الرجاء تعبئة القسم ورقم البند', true); return; }
+    const departmentSlug = department.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+    const id = this.editingId || `${auditType}_${departmentSlug}_${itemNo}`;
+    const data = {
+      auditType, department, departmentSlug, itemNo,
+      sortOrder: itemNo,
+      complaintNo: document.getElementById('cmf_complaintNo').value.trim(),
+      complaintSummary: document.getElementById('cmf_complaintSummary').value.trim(),
+      model: document.getElementById('cmf_model').value.trim(),
+      correctiveAction: document.getElementById('cmf_correctiveAction').value.trim(),
+      responsibility: document.getElementById('cmf_responsibility').value.trim(),
+      auditPlace: document.getElementById('cmf_auditPlace').value.trim(),
+      applicability: document.getElementById('cmf_applicability').value.trim(),
+      imagePath: document.getElementById('cmf_imagePath').value.trim() || null,
+      active: true,
+      updatedAt: Date.now()
+    };
+    try{
+      await checklistTemplatesCol.doc(id).set(data, {merge:true});
+      toast('تم الحفظ ✓');
+      this.closeForm();
+    }catch(e){ toast('خطأ: '+e.message, true); }
+  },
+
+  async toggleActive(id, makeActive){
+    try{
+      await checklistTemplatesCol.doc(id).set({active: makeActive, updatedAt: Date.now()}, {merge:true});
+      toast(makeActive ? 'تمت إعادة التفعيل ✓' : 'تم التعطيل ✓');
+    }catch(e){ toast('خطأ: '+e.message, true); }
+  },
+
+  async remove(id){
+    if(!confirm('حذف هذا البند نهائياً من بنك التشيك ليست؟ لا يمكن التراجع.')) return;
+    try{
+      await checklistTemplatesCol.doc(id).delete();
+      toast('تم الحذف ✓');
+    }catch(e){ toast('خطأ: '+e.message, true); }
+  },
+
+  async move(id, dir){
+    // Swap sortOrder with the neighboring visible row — cheap, 2-doc write, no full renumber.
+    const rows = this.rows();
+    const i = rows.findIndex(r=>r.id===id);
+    const j = i + dir;
+    if(i<0 || j<0 || j>=rows.length) return;
+    const a = rows[i], b = rows[j];
+    const batch = db.batch();
+    batch.set(checklistTemplatesCol.doc(a.id), {sortOrder: b.sortOrder}, {merge:true});
+    batch.set(checklistTemplatesCol.doc(b.id), {sortOrder: a.sortOrder}, {merge:true});
+    try{ await batch.commit(); }catch(e){ toast('خطأ: '+e.message, true); }
+  },
+
+  updateImportStatus(){
+    const el = document.getElementById('cmImportStatus');
+    if(!el) return;
+    el.textContent = checklistTemplates.length
+      ? `${checklistTemplates.length} بند محمّل حالياً بقاعدة البيانات.`
+      : 'لا توجد بيانات بعد — اضغطي "استيراد البيانات الأولية" لاستيراد بنود الملفين الأصليين (مرة واحدة فقط، آمن التكرار).';
+  },
+
+  async importSeed(){
+    if(!window.CHECKLIST_TEMPLATES_SEED || !CHECKLIST_TEMPLATES_SEED.length){
+      toast('ملف بيانات الاستيراد (checklist_templates_seed.js) غير محمّل', true);
+      return;
+    }
+    if(!confirm(`سيتم استيراد ${CHECKLIST_TEMPLATES_SEED.length} بند من ملفي ASF/NCR الأصليين. العملية آمنة التكرار (upsert بمعرّف ثابت لكل بند). متابعة؟`)) return;
+    try{
+      // Firestore batched writes max out at 500 ops — chunk defensively even though
+      // 376 items fits in one batch today, so future template growth stays safe.
+      const chunks = [];
+      for(let i=0;i<CHECKLIST_TEMPLATES_SEED.length;i+=450) chunks.push(CHECKLIST_TEMPLATES_SEED.slice(i,i+450));
+      for(const chunk of chunks){
+        const batch = db.batch();
+        chunk.forEach(t=>{
+          const {id, ...data} = t;
+          batch.set(checklistTemplatesCol.doc(id), {...data, active:true}, {merge:true});
+        });
+        await batch.commit();
+      }
+      toast('تم استيراد بيانات البداية ✓');
+    }catch(e){ toast('خطأ بالاستيراد: '+e.message, true); }
+  }
+};
+
 /* ============================================================ */
 App.init();
+ChecklistMgmt.init();
 </script>
 </div>
 
