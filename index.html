@@ -1692,7 +1692,7 @@ P2-H3&#9;261758&#9;3&#9;PPH4 - 300&#9;3&#9;6/24/2026"></textarea>
         <td class="cat-cell"><div class="main">${escapeHtml(en.category)}</div><div class="sub">${escapeHtml(en.subCategory)}</div></td>
         <td class="desc-cell">${escapeHtml(en.description)}</td>
         <td>${escapeHtml(en.engineer)}</td>
-        <td><div class="row-actions"><button class="icon-btn" data-del="${en.id}" title="حذف">✕</button></div></td>
+        <td><div class="row-actions"><button class="icon-btn" data-edit="${en.id}" title="تعديل">✎</button><button class="icon-btn" data-del="${en.id}" title="حذف">✕</button></div></td>
       `;
       tbody.appendChild(tr);
     });
@@ -1710,6 +1710,8 @@ P2-H3&#9;261758&#9;3&#9;PPH4 - 300&#9;3&#9;6/24/2026"></textarea>
   }
 
   $('#logTbody').addEventListener('click', async (e)=>{
+    const editBtn = e.target.closest('[data-edit]');
+    if(editBtn){ openEditModal(editBtn.dataset.edit); return; }
     const btn = e.target.closest('[data-del]');
     if(!btn) return;
     if(!confirm('هل تريد حذف هذه الملاحظة نهائيًا؟')) return;
@@ -1720,6 +1722,130 @@ P2-H3&#9;261758&#9;3&#9;PPH4 - 300&#9;3&#9;6/24/2026"></textarea>
       toast('تعذّر الحذف: ' + errMsg(err), true);
     }
   });
+
+  /* ---------------- edit modal (السجل الرئيسي) ---------------- */
+  function openEditModal(id){
+    const en = entries.find(x => x.id === id);
+    if(!en){ toast('تعذّر إيجاد السجل', true); return; }
+    closeEditModal();
+
+    const engDisplay = DATA.engineers.map(titleCase);
+    const overlay = document.createElement('div');
+    overlay.id = 'editOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,20,30,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px 12px;overflow-y:auto;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;max-width:680px;width:100%;padding:20px;margin:20px 0;box-shadow:0 10px 40px rgba(0,0,0,.35);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h3 style="margin:0;font-size:17px;">تعديل الملاحظة — ${escapeHtml(en.ref||'')}</h3>
+          <button type="button" id="editCloseX" style="border:none;background:none;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+        </div>
+        <form id="editForm">
+          <div class="grid cols-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field"><label>النوع</label>
+              <select id="eRelated" style="width:100%;padding:8px;">
+                <option value="QC Note" ${en.related==='QC Note'?'selected':''}>QC Note</option>
+                <option value="NCR" ${en.related==='NCR'?'selected':''}>NCR</option>
+                <option value="ASF" ${en.related==='ASF'?'selected':''}>ASF</option>
+              </select>
+            </div>
+            <div class="field"><label>Near Miss Date</label>
+              <input type="date" id="eDate" value="${escapeHtml(en.date||'')}" style="width:100%;padding:8px;">
+            </div>
+            <div class="field"><label>Category</label>
+              <select id="eCategory" style="width:100%;padding:8px;">${categoryOptionsHtml(en.related, en.category)}</select>
+            </div>
+            <div class="field"><label>Sub-Category</label>
+              <select id="eSubCategory" style="width:100%;padding:8px;">${subCategoryOptionsHtml(en.related, en.category, en.subCategory)}</select>
+            </div>
+            <div class="field"><label>Assembly Plant</label>
+              <input type="text" id="ePlant" value="${escapeHtml(en.plant)}" style="width:100%;padding:8px;">
+            </div>
+            <div class="field"><label>Project No</label>
+              <input type="text" id="eOrderNo" value="${escapeHtml(en.orderNo)}" style="width:100%;padding:8px;">
+            </div>
+            <div class="field"><label>Item</label>
+              <input type="text" id="eOrderItem" value="${escapeHtml(en.orderItem)}" style="width:100%;padding:8px;">
+            </div>
+            <div class="field"><label>Model</label>
+              <input type="text" id="eUnitModel" value="${escapeHtml(en.unitModel)}" style="width:100%;padding:8px;">
+            </div>
+            <div class="field"><label>QTY</label>
+              <input type="number" id="eQty" min="0" value="${escapeHtml(en.qty)}" style="width:100%;padding:8px;">
+            </div>
+            <div class="field"><label>Manufacturing Division</label>
+              <select id="eDivision" style="width:100%;padding:8px;">${plainOptionsHtml(DATA.divisions, en.division)}</select>
+            </div>
+            <div class="field"><label>Quality Engineer</label>
+              <select id="eEngineer" style="width:100%;padding:8px;">${plainOptionsHtml(engDisplay, en.engineer)}</select>
+            </div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>Nearmiss - Finding Description</label>
+            <input type="text" id="eDescription" value="${escapeHtml(en.description)}" style="width:100%;padding:8px;">
+          </div>
+          <div class="field" style="margin-top:12px;"><label>Comments</label>
+            <textarea id="eComments" style="width:100%;padding:8px;min-height:70px;">${escapeHtml(en.comments)}</textarea>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;">
+            <button type="button" id="editCancelBtn" class="btn btn-ghost">إلغاء</button>
+            <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    $('#eRelated', overlay).addEventListener('change', ()=>{
+      const rel = $('#eRelated', overlay).value;
+      $('#eCategory', overlay).innerHTML = categoryOptionsHtml(rel, '');
+      $('#eSubCategory', overlay).innerHTML = subCategoryOptionsHtml(rel, '', '');
+    });
+    $('#eCategory', overlay).addEventListener('change', ()=>{
+      const rel = $('#eRelated', overlay).value;
+      const cat = $('#eCategory', overlay).value;
+      $('#eSubCategory', overlay).innerHTML = subCategoryOptionsHtml(rel, cat, '');
+    });
+    overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeEditModal(); });
+    $('#editCloseX', overlay).addEventListener('click', closeEditModal);
+    $('#editCancelBtn', overlay).addEventListener('click', closeEditModal);
+
+    $('#editForm', overlay).addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const updated = {
+        related: $('#eRelated', overlay).value,
+        date: $('#eDate', overlay).value,
+        category: $('#eCategory', overlay).value,
+        subCategory: $('#eSubCategory', overlay).value,
+        plant: $('#ePlant', overlay).value.trim(),
+        orderNo: $('#eOrderNo', overlay).value.trim(),
+        orderItem: $('#eOrderItem', overlay).value.trim(),
+        unitModel: $('#eUnitModel', overlay).value.trim(),
+        qty: $('#eQty', overlay).value.trim(),
+        division: $('#eDivision', overlay).value,
+        engineer: $('#eEngineer', overlay).value,
+        description: $('#eDescription', overlay).value.trim(),
+        comments: $('#eComments', overlay).value.trim()
+      };
+      if(!updated.date || !updated.engineer || !updated.division || !updated.category || !updated.subCategory || !updated.description){
+        toast('الرجاء تعبئة كل الحقول المطلوبة', true);
+        return;
+      }
+      const submitBtn = e.target.querySelector('button[type=submit]');
+      submitBtn.disabled = true; submitBtn.textContent = 'جارٍ الحفظ...';
+      try{
+        await nmCol.doc(id).update(updated);
+        toast('تم حفظ التعديلات ✓');
+        closeEditModal();
+      }catch(err){
+        toast('تعذّر حفظ التعديلات: ' + errMsg(err), true);
+        submitBtn.disabled = false; submitBtn.textContent = 'حفظ التعديلات';
+      }
+    });
+  }
+
+  function closeEditModal(){
+    const ov = document.getElementById('editOverlay');
+    if(ov) ov.remove();
+  }
 
   ['fltSearch','fltEngineer','fltRelated','fltDivision','fltFrom','fltTo'].forEach(id=>{
     $('#'+id).addEventListener('input', renderLog);
@@ -2073,12 +2199,12 @@ P2-H3&#9;261758&#9;3&#9;PPH4 - 300&#9;3&#9;6/24/2026"></textarea>
     <div class="card">
       <div class="flex-between">
         <h2><span class="num">07</span> لصق القائمة الأسبوعية دفعة وحدة — <span id="bulkEngName">—</span></h2>
-        <span class="small">من ملف Finished tasks: حدّد وانسخ أعمدة Assembly Plant / Project No / Item / Model / QTY والصقهم هون.</span>
+        <span class="small">من ملف Finished tasks: حدّد وانسخ أعمدة Assembly Plant / Project No / Item / Model / QTY / Schedule Date والصقهم هون (بهذا الترتيب، ستة أعمدة).</span>
       </div>
       <div class="field">
-        <label>الصق هون (Ctrl+V) — بيقبل نسخ مباشر من إكسل، عمود Task Owner وباقي الأعمدة الزيادة بيتم تجاهلها تلقائياً</label>
-        <textarea id="bulkPaste" style="height:110px;font-family:var(--font-mono);font-size:12px;direction:ltr;text-align:left;" placeholder="P2-H3	261758	2	PPH4 - 195	2
-P2-H3	261758	3	PPH4 - 300	3"></textarea>
+        <label>الصق هون (Ctrl+V) — بيقبل نسخ مباشر من إكسل، عمود Task Owner وباقي الأعمدة الزيادة بيتم تجاهلها تلقائياً. عمود Schedule Date اختياري — إذا ما انلصق، بيضل فاضي وتقدر تعبّيه يدوياً بالمعاينة.</label>
+        <textarea id="bulkPaste" style="height:110px;font-family:var(--font-mono);font-size:12px;direction:ltr;text-align:left;" placeholder="P2-H3	261758	2	PPH4 - 195	2	6/24/2026
+P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
       </div>
       <div class="row-inline">
         <div class="field"><label>الأسبوع لكل السطور الملصوقة</label>
@@ -2092,7 +2218,7 @@ P2-H3	261758	3	PPH4 - 300	3"></textarea>
       <div id="bulkPreviewWrap" style="display:none;">
         <div class="table-wrap" style="margin:10px 0;">
           <table>
-            <thead><tr><th>Plant</th><th>Project</th><th>Item</th><th>Model</th><th>QTY</th></tr></thead>
+            <thead><tr><th>Plant</th><th>Project</th><th>Item</th><th>Model</th><th>QTY</th><th>Schedule Date</th></tr></thead>
             <tbody id="bulkPreviewBody"></tbody>
           </table>
         </div>
@@ -2118,6 +2244,7 @@ P2-H3	261758	3	PPH4 - 300	3"></textarea>
         <div class="field"><label>Item</label><input id="f_item" type="text"></div>
         <div class="field"><label>Model</label><input id="f_model" type="text"></div>
         <div class="field"><label>QTY</label><input id="f_qty" type="number" min="0" value="1"></div>
+        <div class="field"><label>Schedule Date</label><input id="f_date" type="date"></div>
       </div>
       <div class="row-inline">
         <div class="field"><label>Number of notes (0/1)</label>
@@ -2144,7 +2271,7 @@ P2-H3	261758	3	PPH4 - 300	3"></textarea>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Week</th><th>Plant</th><th>Project</th><th>Item</th><th>Model</th><th>QTY</th>
+          <thead><tr><th>Week</th><th>Plant</th><th>Project</th><th>Item</th><th>Model</th><th>QTY</th><th>Date</th>
             <th>Notes</th><th>NCR</th><th>ASF</th><th>Near Miss</th><th></th></tr></thead>
           <tbody id="entriesBody"></tbody>
         </table>
@@ -2459,6 +2586,7 @@ const App = {
       item: document.getElementById('f_item').value.trim(),
       model: document.getElementById('f_model').value.trim(),
       qty: Number(document.getElementById('f_qty').value) || 0,
+      date: document.getElementById('f_date').value,
       notes: Number(document.getElementById('f_notes').value),
       ncr: Number(document.getElementById('f_ncr').value),
       asf: Number(document.getElementById('f_asf').value)
@@ -2488,7 +2616,7 @@ const App = {
       .filter(([k,v]) => filter==='all' || v.week == filter)
       .sort((a,b)=> (b[1].ts||0)-(a[1].ts||0));
     if(rows.length===0){
-      body.innerHTML = `<tr><td colspan="11" class="empty">ولا سجل لهسا لهاد المهندس</td></tr>`;
+      body.innerHTML = `<tr><td colspan="12" class="empty">ولا سجل لهسا لهاد المهندس</td></tr>`;
       return;
     }
     body.innerHTML = rows.map(([k,v])=>{
@@ -2500,6 +2628,7 @@ const App = {
       return `<tr>
         <td>${v.week}</td><td>${v.plant||'-'}</td><td>${v.project||'-'}</td><td>${v.item||'-'}</td><td>${v.model||'-'}</td>
         <td>${v.qty}</td>
+        <td>${v.date||'-'}</td>
         <td>${sel('notes', v.notes)}</td>
         <td>${sel('ncr', v.ncr)}</td>
         <td>${sel('asf', v.asf)}</td>
@@ -2684,6 +2813,29 @@ const Bulk = {
     return cols.map(c=>(c||'').trim());
   },
 
+  /* بيقبل: رقم تسلسلي إكسل، أو M/D/YYYY (نفس صيغة الملف الأصلي)، أو صيغة ISO جاهزة */
+  parseDate(str){
+    if(!str) return '';
+    str = String(str).trim();
+    if(!str) return '';
+    if(/^\d+(\.\d+)?$/.test(str) && Number(str) > 20000 && Number(str) < 60000){
+      const excelEpoch = Date.UTC(1899,11,30);
+      const d = new Date(excelEpoch + Number(str)*86400000);
+      return d.toISOString().slice(0,10);
+    }
+    let m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if(m){
+      let [, mo, da, yr] = m;
+      if(yr.length===2) yr = '20'+yr;
+      return `${yr}-${mo.padStart(2,'0')}-${da.padStart(2,'0')}`;
+    }
+    m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    const d = new Date(str);
+    if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+    return '';
+  },
+
   preview(){
     const raw = document.getElementById('bulkPaste').value;
     if(!raw.trim()){ toast('الصق البيانات أول', true); return; }
@@ -2694,20 +2846,27 @@ const Bulk = {
       // skip header row if it's the column titles themselves
       if(/assembly\s*plant/i.test(cols[0])) return;
       if(cols.length < 5) return; // not enough columns, skip silently
-      const [plant, project, item, model, qtyRaw] = cols;
+      const [plant, project, item, model, qtyRaw, dateRaw] = cols;
       const qty = Number(String(qtyRaw).replace(/[^\d.\-]/g,'')) || 0;
+      const date = this.parseDate(dateRaw);
       if(!plant && !project && !item && !model) return; // blank line
-      parsed.push({plant, project, item, model, qty});
+      parsed.push({plant, project, item, model, qty, date});
     });
     bulkRows = parsed;
     const body = document.getElementById('bulkPreviewBody');
     const wrap = document.getElementById('bulkPreviewWrap');
     if(parsed.length===0){
-      toast('ما قدرت ألاقي صفوف صحيحة — تأكد إنك نسخت الأعمدة الخمسة كاملة من الإكسل', true);
+      toast('ما قدرت ألاقي صفوف صحيحة — تأكد إنك نسخت الأعمدة كاملة من الإكسل', true);
       wrap.style.display = 'none';
       return;
     }
-    body.innerHTML = parsed.map(r=>`<tr><td>${r.plant||'-'}</td><td>${r.project||'-'}</td><td>${r.item||'-'}</td><td>${r.model||'-'}</td><td>${r.qty}</td></tr>`).join('');
+    body.innerHTML = parsed.map((r,i)=>`<tr><td>${r.plant||'-'}</td><td>${r.project||'-'}</td><td>${r.item||'-'}</td><td>${r.model||'-'}</td><td>${r.qty}</td><td><input type="date" data-idx="${i}" class="bulkDateInput" value="${r.date||''}" style="min-width:130px;"></td></tr>`).join('');
+    body.querySelectorAll('.bulkDateInput').forEach(inp=>{
+      inp.addEventListener('change', e=>{
+        const idx = Number(e.target.dataset.idx);
+        if(bulkRows[idx]) bulkRows[idx].date = e.target.value;
+      });
+    });
     document.getElementById('pkBulkCount').textContent = `${parsed.length} سطر جاهز للحفظ — Week ${document.getElementById('bulk_week').value}`;
     wrap.style.display = 'block';
   },
@@ -2716,7 +2875,7 @@ const Bulk = {
     if(!bulkRows.length){ toast('ولا في سطور للحفظ', true); return; }
     const week = Number(document.getElementById('bulk_week').value);
     const rows = bulkRows.map(r=>({
-      week, plant:r.plant, project:r.project, item:r.item, model:r.model, qty:r.qty,
+      week, plant:r.plant, project:r.project, item:r.item, model:r.model, qty:r.qty, date:r.date||'',
       notes:1, ncr:1, asf:1
     }));
     try{
@@ -2937,11 +3096,11 @@ const IO = {
     ENGINEERS.forEach(eng=>{
       const rows = [
         ['Weekly Data Entry - ' + eng.name],
-        ['Week','Assembly Plant','Project No','Item','Model','QTY','Number of notes (0/1)','Near Miss related NCR (0/1)','Near Miss related ASF (0/1)','Near Miss totally (yes/no)']
+        ['Week','Assembly Plant','Project No','Item','Model','QTY','Schedule Date','Number of notes (0/1)','Near Miss related NCR (0/1)','Near Miss related ASF (0/1)','Near Miss totally (yes/no)']
       ];
       const entries = Calc.entriesFor(eng.id, null).sort((a,b)=>a.week-b.week || (a.ts-b.ts));
       entries.forEach(r=>{
-        rows.push([r.week, r.plant, r.project, r.item, r.model, r.qty, r.notes, r.ncr, r.asf, (r.ncr==1||r.asf==1)?'Yes':'No']);
+        rows.push([r.week, r.plant, r.project, r.item, r.model, r.qty, r.date||'', r.notes, r.ncr, r.asf, (r.ncr==1||r.asf==1)?'Yes':'No']);
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), eng.name.slice(0,31));
     });
