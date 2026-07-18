@@ -3353,7 +3353,7 @@ const ChecklistMgmt = {
   departmentsFor(auditType){
     const set = new Set(checklistTemplates.filter(t=>t.auditType===auditType).map(t=>t.department));
     // fall back to the seed list before the first import happens, so the filter isn't empty
-    if(!set.size && window.CHECKLIST_TEMPLATES_SEED){
+    if(!set.size && typeof CHECKLIST_TEMPLATES_SEED !== 'undefined'){
       CHECKLIST_TEMPLATES_SEED.filter(t=>t.auditType===auditType).forEach(t=> set.add(t.department));
     }
     return [...set];
@@ -3524,7 +3524,7 @@ const ChecklistMgmt = {
   },
 
   async importSeed(){
-    if(!window.CHECKLIST_TEMPLATES_SEED || !CHECKLIST_TEMPLATES_SEED.length){
+    if(typeof CHECKLIST_TEMPLATES_SEED === 'undefined' || !CHECKLIST_TEMPLATES_SEED.length){
       toast('ملف بيانات الاستيراد (checklist_templates_seed.js) غير محمّل', true);
       return;
     }
@@ -3575,7 +3575,7 @@ const STATUS_OPTIONS = {
 
 function departmentsForAuditType(type){
   const set = new Set(checklistTemplates.filter(t=>t.auditType===type).map(t=>t.department));
-  if(!set.size && window.CHECKLIST_TEMPLATES_SEED){
+  if(!set.size && typeof CHECKLIST_TEMPLATES_SEED !== 'undefined'){
     CHECKLIST_TEMPLATES_SEED.filter(t=>t.auditType===type).forEach(t=> set.add(t.department));
   }
   return [...set];
@@ -3583,7 +3583,7 @@ function departmentsForAuditType(type){
 
 function templatesForAudit(type, department){
   let rows = checklistTemplates.filter(t=> t.auditType===type && t.department===department && t.active!==false);
-  if(!rows.length && window.CHECKLIST_TEMPLATES_SEED){
+  if(!rows.length && typeof CHECKLIST_TEMPLATES_SEED !== 'undefined'){
     rows = CHECKLIST_TEMPLATES_SEED.filter(t=> t.auditType===type && t.department===department);
   }
   return rows.sort((a,b)=> (a.sortOrder||0) - (b.sortOrder||0));
