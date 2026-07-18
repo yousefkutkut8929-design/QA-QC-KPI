@@ -2118,6 +2118,7 @@ P2-H3&#9;261758&#9;3&#9;PPH4 - 300&#9;3&#9;6/24/2026"></textarea>
     <button data-view="weekly">الأرقام الأسبوعية</button>
     <button data-view="kpiweekly">KPI Weekly</button>
     <button data-view="checklistmgmt">إدارة بنك التدقيق</button>
+    <button data-view="auditlog">سجل التدقيقات</button>
     <button data-view="pkio">استيراد / تصدير Excel</button>
     <button data-view="settings">الإعدادات</button>
   </nav>
@@ -2492,6 +2493,21 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
     </div>
   </section>
 
+  <!-- AUDIT LOG — list of all completed Near Miss audits, who did them, with export -->
+  <section class="view" id="view-auditlog">
+    <div class="card">
+      <h2><span class="num">19</span> سجل التدقيقات المكتملة</h2>
+      <p class="hint">كل السجلات يلي تعبّى فيها تشيك ليست تدقيق (Do Audit)، مع اسم المهندس يلي عملها.</p>
+      <p class="small" id="alCount" style="margin-top:8px;"></p>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>المهندس</th><th>نوع التدقيق</th><th>القسم</th><th>Project</th><th>Model</th><th>Plant</th><th>Week</th><th>آخر تحديث</th><th></th></tr></thead>
+          <tbody id="alTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- DO AUDIT — checklist execution page opened from a Near Miss row -->
   <section class="view" id="view-doaudit">
     <div class="card">
@@ -2529,7 +2545,10 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
     <div class="card" id="daItemsCard" style="display:none;">
       <div class="flex-between">
         <h2><span class="num">18</span> بنود التشيك ليست<span class="badge" id="daItemsCount" style="margin-inline-start:8px;"></span></h2>
-        <button class="btn amber" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn ghost" onclick="DoAudit.exportAudit()">⬇ تحميل الملف</button>
+          <button class="btn amber" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
+        </div>
       </div>
       <p class="hint">اختر حالة كل بند (Applied/Applicable إلخ)، وأضف ملاحظة إذا لزم. البنود غير المطبَّقة أو غير القابلة للتطبيق ممكن تُترك بدون تعليق.</p>
       <div class="table-wrap" style="margin-top:12px;">
@@ -2538,7 +2557,10 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
           <tbody id="daItemsList"></tbody>
         </table>
       </div>
-      <button class="btn amber" style="margin-top:12px;" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn ghost" onclick="DoAudit.exportAudit()">⬇ تحميل الملف</button>
+        <button class="btn amber" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
+      </div>
     </div>
 
     <div class="card" id="daEmptyState">
@@ -3562,6 +3584,7 @@ function startAuditRecordsRealtime(){
     snap.forEach(doc=> rows[doc.id] = { id: doc.id, ...doc.data() });
     auditRecords = rows;
     if(document.getElementById('entriesBody')) App.renderEntries();
+    if(document.getElementById('alTableBody')) AuditLog.render();
   }, err=>{
     console.error('auditRecords onSnapshot failed:', err);
     toast('تعذّر تحميل سجلات التدقيق: ' + err.message, true);
@@ -3587,6 +3610,38 @@ function templatesForAudit(type, department){
     rows = CHECKLIST_TEMPLATES_SEED.filter(t=> t.auditType===type && t.department===department);
   }
   return rows.sort((a,b)=> (a.sortOrder||0) - (b.sortOrder||0));
+}
+
+// Builds an .xlsx matching the original ASF/NCR checklist layout, filled with the audit
+// answers, and triggers a download. Shared by the live Do Audit page and the Audit Log page.
+function downloadAuditExcel(type, dept, entrySnapshot, engName, answerMap, dateStr){
+  const rows = templatesForAudit(type, dept);
+  if(!rows.length){ toast('ما في بنود لتصديرها', true); return; }
+  const aoa = [];
+  aoa.push([type === 'ASF'
+    ? 'Aftersales Feedback Solution Checklist / قائمة تدقيق حلول ملاحظات ما بعد البيع'
+    : 'Nonconforming Corrective Actions Checklist / قائمة تدقيق إجراءات عدم المطابقة']);
+  aoa.push(['Petra Engineering Industries Co.  |  Quality Control Department']);
+  aoa.push(['Engineer / المهندس:', engName||'', 'Department / القسم:', dept, 'Date / التاريخ:', dateStr]);
+  aoa.push(['Project # / رقم المشروع:', entrySnapshot.project||'', 'Model / الموديل:', entrySnapshot.model||'', 'Plant / المصنع:', entrySnapshot.plant||'', 'Week / الأسبوع:', entrySnapshot.week||'']);
+  aoa.push([]);
+  aoa.push(type === 'ASF'
+    ? ['no.\nالرقم','Corrective Action\nالإجراء التصحيحي','Model\nالموديل','Picture\nصورة','Applied?\nتم التطبيق؟','Comments\nملاحظات']
+    : ['NCR #\nرقم البلاغ','Issue\nالوصف','Responsibility\nالمسؤولية','Audit place\nمكان التدقيق','Picture\nصورة','Applicability\nقابلية التطبيق','Comments\nملاحظات']);
+  rows.forEach(t=>{
+    const a = answerMap[t.id] || {};
+    if(type === 'ASF') aoa.push([t.itemNo, t.correctiveAction||'', t.model||'', t.imagePath||'—', a.status||'', a.comment||'']);
+    else aoa.push([t.itemNo, t.correctiveAction||t.complaintSummary||'', t.responsibility||'', t.auditPlace||'', t.imagePath||'—', a.status||'', a.comment||'']);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = type === 'ASF'
+    ? [{wch:6},{wch:55},{wch:16},{wch:20},{wch:18},{wch:30}]
+    : [{wch:6},{wch:55},{wch:20},{wch:16},{wch:20},{wch:16},{wch:30}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, (type+' Audit').slice(0,31));
+  const safeName = (engName||'').replace(/[^a-zA-Z0-9\u0600-\u06FF]+/g,'_');
+  const safeProj = (entrySnapshot.project||'').toString().replace(/[^a-zA-Z0-9]+/g,'_');
+  XLSX.writeFile(wb, `${type}_Audit_${safeName}_${safeProj}_${dateStr.replace(/\//g,'-')}.xlsx`);
 }
 
 const DoAudit = {
@@ -3745,6 +3800,61 @@ const DoAudit = {
       toast('تم حفظ نتيجة التدقيق ✓');
       document.getElementById('daSavedStatus').textContent = `آخر تحديث: ${new Date(data.updatedAt).toLocaleString('ar-JO')} — بواسطة ${engName}`;
     }catch(e){ toast('خطأ بالحفظ: '+e.message, true); }
+  },
+
+  exportAudit(){
+    const type = document.getElementById('da_auditType').value;
+    const dept = document.getElementById('da_department').value;
+    if(!dept){ toast('الرجاء اختيار القسم أولاً', true); return; }
+    const rows = templatesForAudit(type, dept);
+    const answerMap = {};
+    rows.forEach(t=>{
+      const statusEl = document.getElementById('da_status_'+t.id);
+      const commentEl = document.getElementById('da_comment_'+t.id);
+      if(statusEl) answerMap[t.id] = { status: statusEl.value, comment: (commentEl ? commentEl.value : '') };
+    });
+    const engName = ENGINEERS.find(e=>e.id===this.engId)?.name || this.engId;
+    downloadAuditExcel(type, dept, this.entry, engName, answerMap, new Date().toLocaleDateString('en-GB'));
+  }
+};
+
+const AuditLog = {
+  render(){
+    const tbody = document.getElementById('alTableBody');
+    if(!tbody) return;
+    const records = Object.values(auditRecords).sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0));
+    document.getElementById('alCount').textContent = records.length + ' سجل';
+    if(!records.length){
+      tbody.innerHTML = '<tr><td colspan="9" class="hint" style="text-align:center;padding:20px;">ولا تدقيق مكتمل لهسا.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = records.map(r=>{
+      const s = r.entrySnapshot || {};
+      const dt = r.updatedAt ? new Date(r.updatedAt).toLocaleString('ar-JO') : '-';
+      return `<tr>
+        <td>${r.completedBy||'-'}</td>
+        <td>${r.auditType||'-'}</td>
+        <td>${r.department||'-'}</td>
+        <td>${s.project||'-'}</td>
+        <td>${s.model||'-'}</td>
+        <td>${s.plant||'-'}</td>
+        <td>${s.week||'-'}</td>
+        <td>${dt}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn ghost btn-sm" onclick="DoAudit.open('${r.engineerId}','${r.entryId}')">فتح</button>
+          <button class="btn ghost btn-sm" onclick="AuditLog.exportRecord('${r.entryId}')">⬇ تحميل</button>
+        </td>
+      </tr>`;
+    }).join('');
+  },
+
+  exportRecord(entryKey){
+    const r = auditRecords[entryKey];
+    if(!r){ toast('السجل مش موجود', true); return; }
+    const answerMap = {};
+    (r.items||[]).forEach(a=> answerMap[a.templateId] = a);
+    const dateStr = r.updatedAt ? new Date(r.updatedAt).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+    downloadAuditExcel(r.auditType, r.department, r.entrySnapshot||{}, r.completedBy, answerMap, dateStr);
   }
 };
 
