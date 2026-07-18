@@ -3873,7 +3873,7 @@ const AuditLog = {
     tbody.innerHTML = records.map(r=>{
       const s = r.entrySnapshot || {};
       const dt = r.updatedAt ? new Date(r.updatedAt).toLocaleString('ar-JO') : '-';
-      const docId = DoAudit.docId(r.entryId, r.auditType);
+      const docId = DoAudit.docId(r.entryId, r.auditType, r.department);
       return `<tr>
         <td>${r.completedBy||'-'}</td>
         <td>${r.auditType||'-'}</td>
