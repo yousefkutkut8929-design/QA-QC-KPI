@@ -3649,15 +3649,26 @@ const DoAudit = {
   entryKey: null,
   entry: null,
 
+  // Firestore doc id: one record per (entry, auditType) pair — so a row flagged
+  // both ASF and NCR can have two independent, non-overwriting audit records.
+  docId(entryKey, type){ return entryKey + '::' + type; },
+
   // Rendered inside App.renderEntries() for every Near Miss = Yes row.
+  // Shows progress across whichever types actually apply to that entry (asf/ncr flags).
   buttonHtml(engId, entryKey){
-    const rec = auditRecords[entryKey];
-    return rec
-      ? `<button class="btn ok" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">✓ تدقيق مكتمل</button>`
-      : `<button class="btn amber" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">🔍 بدء تدقيق</button>`;
+    const entry = (liveData.entries[engId] || {})[entryKey] || {};
+    const types = [];
+    if(entry.asf===1) types.push('ASF');
+    if(entry.ncr===1) types.push('NCR');
+    if(!types.length) types.push('ASF'); // fallback, shouldn't normally happen
+    const done = types.filter(t=> auditRecords[this.docId(entryKey,t)]).length;
+    const label = types.length > 1 ? ` (${done}/${types.length})` : '';
+    return done === types.length
+      ? `<button class="btn ok" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">✓ تدقيق مكتمل${label}</button>`
+      : `<button class="btn amber" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">🔍 ${done?'متابعة':'بدء'} تدقيق${label}</button>`;
   },
 
-  open(engId, entryKey){
+  open(engId, entryKey, forceType){
     const entry = (liveData.entries[engId] || {})[entryKey];
     if(!entry){ toast('تعذّر إيجاد هالسجل', true); return; }
     this.engId = engId;
@@ -3676,20 +3687,9 @@ const DoAudit = {
       <td>${entry.date||'-'}</td><td>${engName}</td>
     </tr>`;
 
-    const existing = auditRecords[entryKey];
-    const defaultType = existing?.auditType || (entry.asf===1 ? 'ASF' : (entry.ncr===1 ? 'NCR' : 'ASF'));
+    const defaultType = forceType || (entry.asf===1 ? 'ASF' : (entry.ncr===1 ? 'NCR' : 'ASF'));
     document.getElementById('da_auditType').value = defaultType;
-    this.refreshDepartments(existing?.department || '');
-    document.getElementById('daSavedStatus').textContent = existing
-      ? `آخر تحديث: ${new Date(existing.updatedAt).toLocaleString('ar-JO')} — بواسطة ${existing.completedBy||''}`
-      : 'لسا ما تحفظ تدقيق لهاد السجل.';
-
-    if(existing?.department){
-      this.renderItems(existing.items || []);
-    } else {
-      document.getElementById('daItemsCard').style.display = 'none';
-      document.getElementById('daEmptyState').style.display = 'block';
-    }
+    this.loadForType(defaultType);
   },
 
   close(){
@@ -3706,20 +3706,35 @@ const DoAudit = {
     sel.value = selected || '';
   },
 
+  // Loads whichever saved record exists for the given type on the current entry
+  // (if any), and populates the department dropdown + items table accordingly.
+  loadForType(type){
+    const existing = auditRecords[this.docId(this.entryKey, type)];
+    this.refreshDepartments(existing?.department || '');
+    document.getElementById('daSavedStatus').textContent = existing
+      ? `آخر تحديث (${type}): ${new Date(existing.updatedAt).toLocaleString('ar-JO')} — بواسطة ${existing.completedBy||''}`
+      : `لسا ما تحفظ تدقيق ${type} لهاد السجل.`;
+    if(existing?.department){
+      this.renderItems(existing.items || []);
+    } else {
+      document.getElementById('daItemsCard').style.display = 'none';
+      document.getElementById('daEmptyState').style.display = 'block';
+    }
+  },
+
   onTypeChange(){
-    this.refreshDepartments('');
-    document.getElementById('daItemsCard').style.display = 'none';
-    document.getElementById('daEmptyState').style.display = 'block';
+    this.loadForType(document.getElementById('da_auditType').value);
   },
 
   onDepartmentChange(){
+    const type = document.getElementById('da_auditType').value;
     const dept = document.getElementById('da_department').value;
     if(!dept){
       document.getElementById('daItemsCard').style.display = 'none';
       document.getElementById('daEmptyState').style.display = 'block';
       return;
     }
-    const existing = auditRecords[this.entryKey];
+    const existing = auditRecords[this.docId(this.entryKey, type)];
     const prevAnswers = (existing && existing.department === dept) ? (existing.items || []) : [];
     this.renderItems(prevAnswers);
   },
@@ -3796,9 +3811,9 @@ const DoAudit = {
       updatedAt: Date.now()
     };
     try{
-      await auditRecordsCol.doc(this.entryKey).set(data, {merge:true});
-      toast('تم حفظ نتيجة التدقيق ✓');
-      document.getElementById('daSavedStatus').textContent = `آخر تحديث: ${new Date(data.updatedAt).toLocaleString('ar-JO')} — بواسطة ${engName}`;
+      await auditRecordsCol.doc(this.docId(this.entryKey, type)).set(data, {merge:true});
+      toast(`تم حفظ نتيجة تدقيق ${type} ✓`);
+      document.getElementById('daSavedStatus').textContent = `آخر تحديث (${type}): ${new Date(data.updatedAt).toLocaleString('ar-JO')} — بواسطة ${engName}`;
     }catch(e){ toast('خطأ بالحفظ: '+e.message, true); }
   },
 
@@ -3831,6 +3846,7 @@ const AuditLog = {
     tbody.innerHTML = records.map(r=>{
       const s = r.entrySnapshot || {};
       const dt = r.updatedAt ? new Date(r.updatedAt).toLocaleString('ar-JO') : '-';
+      const docId = DoAudit.docId(r.entryId, r.auditType);
       return `<tr>
         <td>${r.completedBy||'-'}</td>
         <td>${r.auditType||'-'}</td>
@@ -3841,15 +3857,15 @@ const AuditLog = {
         <td>${s.week||'-'}</td>
         <td>${dt}</td>
         <td style="white-space:nowrap;">
-          <button class="btn ghost btn-sm" onclick="DoAudit.open('${r.engineerId}','${r.entryId}')">فتح</button>
-          <button class="btn ghost btn-sm" onclick="AuditLog.exportRecord('${r.entryId}')">⬇ تحميل</button>
+          <button class="btn ghost btn-sm" onclick="DoAudit.open('${r.engineerId}','${r.entryId}','${r.auditType}')">فتح</button>
+          <button class="btn ghost btn-sm" onclick="AuditLog.exportRecord('${docId}')">⬇ تحميل</button>
         </td>
       </tr>`;
     }).join('');
   },
 
-  exportRecord(entryKey){
-    const r = auditRecords[entryKey];
+  exportRecord(docId){
+    const r = auditRecords[docId];
     if(!r){ toast('السجل مش موجود', true); return; }
     const answerMap = {};
     (r.items||[]).forEach(a=> answerMap[a.templateId] = a);
