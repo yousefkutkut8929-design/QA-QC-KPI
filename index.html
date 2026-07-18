@@ -3311,7 +3311,7 @@ function startChecklistTemplatesRealtime(){
     const rows = [];
     snap.forEach(doc=> rows.push({ id: doc.id, ...doc.data() }));
     checklistTemplates = rows;
-    if(window.ChecklistMgmt) ChecklistMgmt.onData();
+    if(typeof ChecklistMgmt !== 'undefined') ChecklistMgmt.onData();
   }, err=>{
     console.error('checklistTemplates onSnapshot failed:', err);
     toast('تعذّر تحميل بنك تشيك ليست التدقيق: ' + err.message, true);
@@ -3766,7 +3766,7 @@ startAuditRecordsRealtime();
 <script>
 (function(){
   var buttons = document.querySelectorAll('.outer-tabs button[data-section]');
-  var sections = { nm: document.getElementById('nm-root'), pk: document.getElementById('pk-root') };
+  var sections = { nm: document.getElementById('nm-root'), pk: document.getElementById('pk-section') };
   buttons.forEach(function(btn){
     btn.addEventListener('click', function(){
       buttons.forEach(function(b){ b.classList.toggle('active', b === btn); });
