@@ -2540,6 +2540,10 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
           <p class="small" id="daSavedStatus">لسا ما تحفظ تدقيق لهاد السجل.</p>
         </div>
       </div>
+      <div style="margin-top:14px;">
+        <label style="font-size:12px;font-weight:700;color:var(--navy-700);">تدقيقات محفوظة لهاد السجل (اضغطي للانتقال):</label>
+        <div id="daCompletedList" style="margin-top:6px;"></div>
+      </div>
     </div>
 
     <div class="card" id="daItemsCard" style="display:none;">
@@ -3649,26 +3653,22 @@ const DoAudit = {
   entryKey: null,
   entry: null,
 
-  // Firestore doc id: one record per (entry, auditType) pair — so a row flagged
-  // both ASF and NCR can have two independent, non-overwriting audit records.
-  docId(entryKey, type){ return entryKey + '::' + type; },
+  // Firestore doc id: one record per (entry, auditType, department) triple — so the
+  // same near-miss unit can have independent audits across several departments
+  // (e.g. Ref. Production + Elect. Panels + packing), none of them overwriting another.
+  slugDept(dept){ return (dept||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); },
+  docId(entryKey, type, dept){ return entryKey + '::' + type + '::' + this.slugDept(dept); },
 
   // Rendered inside App.renderEntries() for every Near Miss = Yes row.
-  // Shows progress across whichever types actually apply to that entry (asf/ncr flags).
   buttonHtml(engId, entryKey){
-    const entry = (liveData.entries[engId] || {})[entryKey] || {};
-    const types = [];
-    if(entry.asf===1) types.push('ASF');
-    if(entry.ncr===1) types.push('NCR');
-    if(!types.length) types.push('ASF'); // fallback, shouldn't normally happen
-    const done = types.filter(t=> auditRecords[this.docId(entryKey,t)]).length;
-    const label = types.length > 1 ? ` (${done}/${types.length})` : '';
-    return done === types.length
-      ? `<button class="btn ok" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">✓ تدقيق مكتمل${label}</button>`
-      : `<button class="btn amber" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">🔍 ${done?'متابعة':'بدء'} تدقيق${label}</button>`;
+    const prefix = entryKey + '::';
+    const count = Object.keys(auditRecords).filter(k=> k.indexOf(prefix)===0).length;
+    return count > 0
+      ? `<button class="btn ok" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">✓ ${count} تدقيق محفوظ</button>`
+      : `<button class="btn amber" style="padding:4px 10px;font-size:11px;" onclick="DoAudit.open('${engId}','${entryKey}')">🔍 بدء تدقيق</button>`;
   },
 
-  open(engId, entryKey, forceType){
+  open(engId, entryKey, forceType, forceDept){
     const entry = (liveData.entries[engId] || {})[entryKey];
     if(!entry){ toast('تعذّر إيجاد هالسجل', true); return; }
     this.engId = engId;
@@ -3689,7 +3689,7 @@ const DoAudit = {
 
     const defaultType = forceType || (entry.asf===1 ? 'ASF' : (entry.ncr===1 ? 'NCR' : 'ASF'));
     document.getElementById('da_auditType').value = defaultType;
-    this.loadForType(defaultType);
+    this.loadForType(defaultType, forceDept || '');
   },
 
   close(){
@@ -3706,24 +3706,22 @@ const DoAudit = {
     sel.value = selected || '';
   },
 
-  // Loads whichever saved record exists for the given type on the current entry
-  // (if any), and populates the department dropdown + items table accordingly.
-  loadForType(type){
-    const existing = auditRecords[this.docId(this.entryKey, type)];
-    this.refreshDepartments(existing?.department || '');
-    document.getElementById('daSavedStatus').textContent = existing
-      ? `آخر تحديث (${type}): ${new Date(existing.updatedAt).toLocaleString('ar-JO')} — بواسطة ${existing.completedBy||''}`
-      : `لسا ما تحفظ تدقيق ${type} لهاد السجل.`;
-    if(existing?.department){
-      this.renderItems(existing.items || []);
+  // Switches audit type; optionally jumps straight to a given department (used when
+  // resuming from the completed-audits list or from the Audit Log "فتح" button).
+  loadForType(type, dept){
+    this.refreshDepartments(dept || '');
+    this.renderCompletedList();
+    if(dept){
+      this.onDepartmentChange();
     } else {
+      document.getElementById('daSavedStatus').textContent = `اختاري القسم فوق لعرض/بدء تدقيق ${type} — أو اضغطي على أحد التدقيقات المحفوظة تحت للانتقال لها.`;
       document.getElementById('daItemsCard').style.display = 'none';
       document.getElementById('daEmptyState').style.display = 'block';
     }
   },
 
   onTypeChange(){
-    this.loadForType(document.getElementById('da_auditType').value);
+    this.loadForType(document.getElementById('da_auditType').value, '');
   },
 
   onDepartmentChange(){
@@ -3734,9 +3732,37 @@ const DoAudit = {
       document.getElementById('daEmptyState').style.display = 'block';
       return;
     }
-    const existing = auditRecords[this.docId(this.entryKey, type)];
-    const prevAnswers = (existing && existing.department === dept) ? (existing.items || []) : [];
-    this.renderItems(prevAnswers);
+    const existing = auditRecords[this.docId(this.entryKey, type, dept)];
+    document.getElementById('daSavedStatus').textContent = existing
+      ? `آخر تحديث (${type} — ${dept}): ${new Date(existing.updatedAt).toLocaleString('ar-JO')} — بواسطة ${existing.completedBy||''}`
+      : `لسا ما تحفظ تدقيق ${type} — ${dept} لهاد السجل. عبّي البنود وبعدين احفظي.`;
+    this.renderItems(existing ? (existing.items || []) : []);
+    this.renderCompletedList();
+  },
+
+  // Quick-jump pills: every (type, department) already saved for this entry, across BOTH
+  // audit types, so the engineer can move between e.g. refrigeration/electrical/packing checks.
+  renderCompletedList(){
+    const wrap = document.getElementById('daCompletedList');
+    if(!wrap) return;
+    const prefix = this.entryKey + '::';
+    const mine = Object.keys(auditRecords).filter(k=> k.indexOf(prefix)===0).map(k=>auditRecords[k]);
+    if(!mine.length){
+      wrap.innerHTML = '<span class="hint">ولا تدقيق محفوظ لهسا لهاد السجل — اختاري نوع وقسم وابدئي.</span>';
+      return;
+    }
+    const curType = document.getElementById('da_auditType').value;
+    const curDept = document.getElementById('da_department').value;
+    wrap.innerHTML = mine.sort((a,b)=> (a.auditType+a.department).localeCompare(b.auditType+b.department)).map(r=>{
+      const active = r.auditType===curType && r.department===curDept;
+      return `<button class="btn ${active?'ok':'ghost'} btn-sm" style="margin:2px 4px 2px 0;" onclick="DoAudit.jumpTo('${r.auditType}','${r.department.replace(/'/g,"\\'")}')">${r.auditType} — ${r.department}</button>`;
+    }).join('');
+  },
+
+  jumpTo(type, dept){
+    document.getElementById('da_auditType').value = type;
+    this.refreshDepartments(dept);
+    this.onDepartmentChange();
   },
 
   renderItems(prevAnswers){
@@ -3811,9 +3837,10 @@ const DoAudit = {
       updatedAt: Date.now()
     };
     try{
-      await auditRecordsCol.doc(this.docId(this.entryKey, type)).set(data, {merge:true});
-      toast(`تم حفظ نتيجة تدقيق ${type} ✓`);
-      document.getElementById('daSavedStatus').textContent = `آخر تحديث (${type}): ${new Date(data.updatedAt).toLocaleString('ar-JO')} — بواسطة ${engName}`;
+      await auditRecordsCol.doc(this.docId(this.entryKey, type, dept)).set(data, {merge:true});
+      toast(`تم حفظ نتيجة تدقيق ${type} — ${dept} ✓`);
+      document.getElementById('daSavedStatus').textContent = `آخر تحديث (${type} — ${dept}): ${new Date(data.updatedAt).toLocaleString('ar-JO')} — بواسطة ${engName}`;
+      this.renderCompletedList();
     }catch(e){ toast('خطأ بالحفظ: '+e.message, true); }
   },
 
@@ -3857,7 +3884,7 @@ const AuditLog = {
         <td>${s.week||'-'}</td>
         <td>${dt}</td>
         <td style="white-space:nowrap;">
-          <button class="btn ghost btn-sm" onclick="DoAudit.open('${r.engineerId}','${r.entryId}','${r.auditType}')">فتح</button>
+          <button class="btn ghost btn-sm" onclick="DoAudit.open('${r.engineerId}','${r.entryId}','${r.auditType}','${(r.department||'').replace(/'/g,"\\'")}')">فتح</button>
           <button class="btn ghost btn-sm" onclick="AuditLog.exportRecord('${docId}')">⬇ تحميل</button>
         </td>
       </tr>`;
