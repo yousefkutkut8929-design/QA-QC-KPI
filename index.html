@@ -3693,14 +3693,15 @@ const DoAudit = {
         ? (t.model ? `Model: ${t.model}` : '')
         : [t.responsibility ? `Responsibility: ${t.responsibility}` : '', t.auditPlace ? `Audit place: ${t.auditPlace}` : ''].filter(Boolean).join(' — ');
       const options = STATUS_OPTIONS[type] || [];
-      return `<tr id="daItem_${t.id}" class="${prev.status ? 'answered':''}">
+      const status = prev.status || options[0] || '';
+      return `<tr id="daItem_${t.id}" class="${status ? 'answered':''}">
         <td>${t.itemNo}</td>
         <td class="ai-text">${text}${meta ? `<div class="ai-meta">${meta}</div>` : ''}</td>
         <td>${img}</td>
         <td>
           <select id="da_status_${t.id}" onchange="DoAudit.markAnswered('${t.id}')">
             <option value="">-- اختر --</option>
-            ${options.map(o=>`<option value="${o}" ${prev.status===o?'selected':''}>${o}</option>`).join('')}
+            ${options.map(o=>`<option value="${o}" ${status===o?'selected':''}>${o}</option>`).join('')}
           </select>
         </td>
         <td><input type="text" id="da_comment_${t.id}" value="${(prev.comment||'').replace(/"/g,'&quot;')}" placeholder="اختياري"></td>
