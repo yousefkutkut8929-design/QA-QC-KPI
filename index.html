@@ -777,17 +777,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
 #pk-root .btn.ok:hover{background:#3f6549;}
 
-#pk-root .audit-item{border:1.5px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;background:#FCFCFA;}
+#pk-root #daItemsList tr.answered{background:#F3F8F4;}
 
-#pk-root .audit-item.answered{border-color:var(--ok);background:#F3F8F4;}
+#pk-root #daItemsList .ai-thumb{width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:pointer;}
 
-#pk-root .audit-item .ai-head{display:flex;gap:12px;align-items:flex-start;}
+#pk-root #daItemsList td.ai-text{white-space:pre-wrap;font-size:13px;line-height:1.55;max-width:420px;}
 
-#pk-root .audit-item .ai-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer;flex-shrink:0;}
-
-#pk-root .audit-item .ai-text{flex:1;white-space:pre-wrap;font-size:13px;line-height:1.55;}
-
-#pk-root .audit-item .ai-meta{font-size:11.5px;color:var(--navy-700);margin-top:4px;}
+#pk-root #daItemsList .ai-meta{font-size:11.5px;color:var(--navy-700);margin-top:4px;}
 
 #pk-root .btn:disabled{opacity:.5;cursor:not-allowed;}
 
@@ -2536,8 +2532,13 @@ P2-H3	261758	3	PPH4 - 300	3	6/24/2026"></textarea>
         <button class="btn amber" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
       </div>
       <p class="hint">اختر حالة كل بند (Applied/Applicable إلخ)، وأضف ملاحظة إذا لزم. البنود غير المطبَّقة أو غير القابلة للتطبيق ممكن تُترك بدون تعليق.</p>
-      <div id="daItemsList" style="margin-top:12px;"></div>
-      <button class="btn amber" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead><tr><th style="width:40px;">#</th><th>الوصف</th><th style="width:60px;">صورة</th><th style="width:220px;">الحالة</th><th style="width:220px;">ملاحظات</th></tr></thead>
+          <tbody id="daItemsList"></tbody>
+        </table>
+      </div>
+      <button class="btn amber" style="margin-top:12px;" onclick="DoAudit.save()">💾 حفظ نتيجة التدقيق</button>
     </div>
 
     <div class="card" id="daEmptyState">
@@ -3680,40 +3681,30 @@ const DoAudit = {
     document.getElementById('daItemsCount').textContent = rows.length + ' بند';
 
     if(!rows.length){
-      document.getElementById('daItemsList').innerHTML = '<p class="hint">لا توجد بنود تشيك ليست لهاد القسم بعد. تأكدي من استيراد بنك التشيك ليست من تبويب "إدارة بنك التدقيق".</p>';
+      document.getElementById('daItemsList').innerHTML = '<tr><td colspan="5" class="hint" style="text-align:center;padding:20px;">لا توجد بنود تشيك ليست لهاد القسم بعد. تأكدي من استيراد بنك التشيك ليست من تبويب "إدارة بنك التدقيق".</td></tr>';
       return;
     }
 
     document.getElementById('daItemsList').innerHTML = rows.map(t=>{
       const prev = answerMap[t.id] || {};
-      const img = t.imagePath ? `<img class="ai-thumb" src="images/checklists/${t.imagePath}" loading="lazy" onclick="ChecklistMgmt.previewImage('${t.imagePath}')">` : '';
+      const img = t.imagePath ? `<img class="ai-thumb" src="images/checklists/${t.imagePath}" loading="lazy" onclick="ChecklistMgmt.previewImage('${t.imagePath}')">` : '<span class="hint">—</span>';
       const text = t.correctiveAction || t.complaintSummary || '';
       const meta = type === 'ASF'
         ? (t.model ? `Model: ${t.model}` : '')
         : [t.responsibility ? `Responsibility: ${t.responsibility}` : '', t.auditPlace ? `Audit place: ${t.auditPlace}` : ''].filter(Boolean).join(' — ');
       const options = STATUS_OPTIONS[type] || [];
-      return `<div class="audit-item ${prev.status ? 'answered':''}" id="daItem_${t.id}">
-        <div class="ai-head">
-          ${img}
-          <div style="flex:1;">
-            <div class="ai-text"><b>#${t.itemNo}</b> — ${text}</div>
-            ${meta ? `<div class="ai-meta">${meta}</div>` : ''}
-          </div>
-        </div>
-        <div class="grid cols-2" style="margin-top:10px;">
-          <div class="field">
-            <label>الحالة</label>
-            <select id="da_status_${t.id}" onchange="DoAudit.markAnswered('${t.id}')">
-              <option value="">-- اختر --</option>
-              ${options.map(o=>`<option value="${o}" ${prev.status===o?'selected':''}>${o}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field">
-            <label>ملاحظات</label>
-            <input type="text" id="da_comment_${t.id}" value="${(prev.comment||'').replace(/"/g,'&quot;')}" placeholder="اختياري">
-          </div>
-        </div>
-      </div>`;
+      return `<tr id="daItem_${t.id}" class="${prev.status ? 'answered':''}">
+        <td>${t.itemNo}</td>
+        <td class="ai-text">${text}${meta ? `<div class="ai-meta">${meta}</div>` : ''}</td>
+        <td>${img}</td>
+        <td>
+          <select id="da_status_${t.id}" onchange="DoAudit.markAnswered('${t.id}')">
+            <option value="">-- اختر --</option>
+            ${options.map(o=>`<option value="${o}" ${prev.status===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="text" id="da_comment_${t.id}" value="${(prev.comment||'').replace(/"/g,'&quot;')}" placeholder="اختياري"></td>
+      </tr>`;
     }).join('');
   },
 
